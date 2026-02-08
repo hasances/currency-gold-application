@@ -50,7 +50,9 @@ class _GoldTabState extends State<GoldTab> {
 
   Future<void> fetchGold() async {
     try {
-      final res = await http.get(Uri.parse(Config.goldEndpoint));
+      final res = await http
+          .get(Uri.parse(Config.goldEndpoint))
+          .timeout(Config.requestTimeout);
       final data = jsonDecode(res.body);
       setState(() {
         coins = Map<String, dynamic>.from(data['coins']);
@@ -59,6 +61,24 @@ class _GoldTabState extends State<GoldTab> {
       });
     } catch (e) {
       debugPrint('Gold Fetch Fehler: $e');
+      setState(() => loading = false);
+
+      // Zeige Fehler-Snackbar
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Fehler beim Laden der Goldpreise: ${e.toString()}'),
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Erneut versuchen',
+              onPressed: () {
+                setState(() => loading = true);
+                fetchGold();
+              },
+            ),
+          ),
+        );
+      }
     }
   }
 

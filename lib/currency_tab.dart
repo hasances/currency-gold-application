@@ -61,7 +61,9 @@ class _CurrencyTabState extends State<CurrencyTab> {
 
   Future<void> fetchRates() async {
     try {
-      final response = await http.get(Uri.parse(Config.ratesEndpoint));
+      final response = await http
+          .get(Uri.parse(Config.ratesEndpoint))
+          .timeout(Config.requestTimeout);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         final rawRates = Map<String, dynamic>.from(data['rates']);

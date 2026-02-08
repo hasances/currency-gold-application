@@ -89,16 +89,96 @@ flutter build apk \
 
 ## Schritt 4: App bauen & testen
 
-### Android APK
+### Android APK bauen
 ```bash
 flutter build apk --dart-define=DEVELOPMENT=false --release
 ```
 Output: `build/app/outputs/flutter-apk/app-release.apk`
 
+### APK auf dem Handy installieren
+
+#### Methode 1: USB-Kabel (Einfachste) ⭐
+
+1. **APK vom PC auf Handy kopieren**:
+   - Verbinde Handy per USB-Kabel mit PC
+   - Entsperre das Handy und wähle "Dateien übertragen" (MTP-Modus)
+   - Navigiere zu: `Dieser PC` → `Dein Handy` → `Download` Ordner
+   - Kopiere `app-release.apk` dorthin
+
+2. **APK installieren**:
+   - Öffne auf dem Handy die **Dateien-App** oder **Eigene Dateien**
+   - Gehe zum **Download** Ordner
+   - Tippe auf `app-release.apk`
+   - Falls Warnung erscheint: **"Aus dieser Quelle zulassen"** aktivieren
+   - Tippe auf **"Installieren"**
+
+#### Methode 2: Google Drive / Cloud
+
+1. Lade `app-release.apk` zu Google Drive hoch
+2. Öffne Google Drive auf dem Handy
+3. Tippe auf die APK-Datei
+4. Tippe **"Herunterladen"** und dann **"Öffnen"**
+5. Installiere wie oben
+
+#### Methode 3: ADB (Für Entwickler)
+
+```powershell
+# ADB installieren (Teil von Android SDK)
+# Oder: choco install adb
+
+# Handy mit USB verbinden und USB-Debugging aktivieren
+# Einstellungen → Entwickleroptionen → USB-Debugging
+
+# APK installieren
+adb install build\app\outputs\flutter-apk\app-release.apk
+
+# Falls Gerät nicht erkannt:
+adb devices
+
+# Bei mehreren Geräten:
+adb -s DEVICE_ID install app-release.apk
+```
+
+#### Methode 4: Per Email/WhatsApp
+
+1. Sende dir die APK per Email oder WhatsApp
+2. Öffne auf dem Handy die Email/Nachricht
+3. Lade die APK herunter
+4. Installiere wie bei Methode 1
+
+### ⚠️ Android Sicherheitswarnung
+
+Bei der Installation erscheint: **"Aus unbekannten Quellen"**
+
+**Das ist normal!** Die App ist nicht im Play Store, daher warnt Android.
+
+**So erlaubst du die Installation**:
+- Android 8+: "Aus dieser Quelle zulassen" aktivieren (nur für diese Installation)
+- Android 7 und älter: Einstellungen → Sicherheit → "Unbekannte Quellen" aktivieren
+
 ### Testen
-1. Installiere die APK auf deinem Handy
+1. Installiere die APK auf deinem Handy (siehe oben)
 2. Öffne die App (Internet erforderlich für erste Daten)
 3. Teste ohne Internet - sollte cached Daten zeigen
+
+### 🔧 Installations-Probleme?
+
+**"App nicht installiert"**:
+- Alte Version deinstallieren, falls vorhanden
+- Prüfe, ob genug Speicherplatz frei ist (mind. 100 MB)
+
+**"Installation blockiert"**:
+- Aktiviere "Aus dieser Quelle zulassen"
+- Oder: Einstellungen → Apps → Spezielle App-Zugriffe → Unbekannte Apps installieren
+
+**APK lässt sich nicht öffnen**:
+- Prüfe, ob Download vollständig war (Dateigröße ~40-60 MB)
+- Neu herunterladen falls beschädigt
+
+**USB-Kabel wird nicht erkannt**:
+- Probiere anderes USB-Kabel
+- Wähle "Dateien übertragen" statt "Nur laden"
+- Entsperre das Handy
 
 ## ✅ Fertig!
 
