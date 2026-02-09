@@ -6,6 +6,94 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'config.dart';
 
+// Währungsnamen
+const Map<String, String> currencyNames = {
+  'EUR': 'Euro',
+  'USD': 'US-Dollar',
+  'GBP': 'Britisches Pfund',
+  'CHF': 'Schweizer Franken',
+  'JPY': 'Japanischer Yen',
+  'CNY': 'Chinesischer Yuan',
+  'TRY': 'Türkische Lira',
+  'RUB': 'Russischer Rubel',
+  'INR': 'Indische Rupie',
+  'BRL': 'Brasilianischer Real',
+  'ZAR': 'Südafrikanischer Rand',
+  'AUD': 'Australischer Dollar',
+  'CAD': 'Kanadischer Dollar',
+  'NZD': 'Neuseeland-Dollar',
+  'SGD': 'Singapur-Dollar',
+  'HKD': 'Hongkong-Dollar',
+  'KRW': 'Südkoreanischer Won',
+  'MXN': 'Mexikanischer Peso',
+  'SEK': 'Schwedische Krone',
+  'NOK': 'Norwegische Krone',
+  'DKK': 'Dänische Krone',
+  'PLN': 'Polnischer Złoty',
+  'CZK': 'Tschechische Krone',
+  'HUF': 'Ungarischer Forint',
+  'RON': 'Rumänischer Leu',
+  'BGN': 'Bulgarischer Lew',
+  'HRK': 'Kroatische Kuna',
+  'ISK': 'Isländische Krone',
+  'THB': 'Thailändischer Baht',
+  'MYR': 'Malaysischer Ringgit',
+  'IDR': 'Indonesische Rupiah',
+  'PHP': 'Philippinischer Peso',
+  'ILS': 'Israelischer Schekel',
+  'AED': 'VAE-Dirham',
+  'SAR': 'Saudi-Riyal',
+  'EGP': 'Ägyptisches Pfund',
+  'ARS': 'Argentinischer Peso',
+  'CLP': 'Chilenischer Peso',
+  'COP': 'Kolumbianischer Peso',
+  'PEN': 'Peruanischer Sol',
+};
+
+// Währungsflaggen (Unicode Regional Indicator Symbols)
+const Map<String, String> currencyFlags = {
+  'EUR': '🇪🇺',
+  'USD': '🇺🇸',
+  'GBP': '🇬🇧',
+  'CHF': '🇨🇭',
+  'JPY': '🇯🇵',
+  'CNY': '🇨🇳',
+  'TRY': '🇹🇷',
+  'RUB': '🇷🇺',
+  'INR': '🇮🇳',
+  'BRL': '🇧🇷',
+  'ZAR': '🇿🇦',
+  'AUD': '🇦🇺',
+  'CAD': '🇨🇦',
+  'NZD': '🇳🇿',
+  'SGD': '🇸🇬',
+  'HKD': '🇭🇰',
+  'KRW': '🇰🇷',
+  'MXN': '🇲🇽',
+  'SEK': '🇸🇪',
+  'NOK': '🇳🇴',
+  'DKK': '🇩🇰',
+  'PLN': '🇵🇱',
+  'CZK': '🇨🇿',
+  'HUF': '🇭🇺',
+  'RON': '🇷🇴',
+  'BGN': '🇧🇬',
+  'HRK': '🇭🇷',
+  'ISK': '🇮🇸',
+  'THB': '🇹🇭',
+  'MYR': '🇲🇾',
+  'IDR': '🇮🇩',
+  'PHP': '🇵🇭',
+  'ILS': '🇮🇱',
+  'AED': '🇦🇪',
+  'SAR': '🇸🇦',
+  'EGP': '🇪🇬',
+  'ARS': '🇦🇷',
+  'CLP': '🇨🇱',
+  'COP': '🇨🇴',
+  'PEN': '🇵🇪',
+};
+
 class CurrencyTab extends StatefulWidget {
   const CurrencyTab({super.key});
 
@@ -25,7 +113,8 @@ class _CurrencyTabState extends State<CurrencyTab> {
   bool? isCached;
   int? cacheAge;
 
-  final List<String> baseFavorites = ['EUR', 'TRY', 'USD', 'GBP', 'CHF'];
+  // Favoriten (dynamisch, persistent)
+  Set<String> favorites = {'EUR', 'TRY', 'USD', 'GBP', 'CHF'};
   final TextEditingController amountController = TextEditingController(
     text: '1',
   );
@@ -33,6 +122,7 @@ class _CurrencyTabState extends State<CurrencyTab> {
   @override
   void initState() {
     super.initState();
+    loadFavorites();
     loadRates();
     updateTimer = Timer.periodic(
       const Duration(minutes: 5),
@@ -44,6 +134,32 @@ class _CurrencyTabState extends State<CurrencyTab> {
   void dispose() {
     updateTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> loadFavorites() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getStringList('currency_favorites');
+    if (stored != null && stored.isNotEmpty) {
+      setState(() {
+        favorites = Set.from(stored);
+      });
+    }
+  }
+
+  Future<void> saveFavorites() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('currency_favorites', favorites.toList());
+  }
+
+  void toggleFavorite(String currency) {
+    setState(() {
+      if (favorites.contains(currency)) {
+        favorites.remove(currency);
+      } else {
+        favorites.add(currency);
+      }
+    });
+    saveFavorites();
   }
 
   Future<void> loadRates() async {
@@ -118,16 +234,53 @@ class _CurrencyTabState extends State<CurrencyTab> {
         ? inputAmount
         : inputAmount * (rate / (rates[base] ?? 1.0));
 
+    final isFavorite = favorites.contains(currency);
+    final flag = currencyFlags[currency] ?? '🏳️';
+    final fullName = currencyNames[currency] ?? currency;
+
     return ListTile(
-      title: Text(currency),
+      leading: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            flag,
+            style: const TextStyle(fontSize: 32),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: Icon(
+              isFavorite ? Icons.star : Icons.star_border,
+              color: isFavorite ? Colors.amber : Colors.grey,
+              size: 24,
+            ),
+            onPressed: () => toggleFavorite(currency),
+            tooltip: isFavorite ? 'Aus Favoriten entfernen' : 'Zu Favoriten hinzufügen',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+        ],
+      ),
+      title: Text(
+        '$currency - $fullName',
+        style: TextStyle(
+          fontWeight: isFavorite ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
       subtitle: Text('$base → $currency'),
+      isThreeLine: false,
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(converted.toStringAsFixed(2)),
+              Text(
+                converted.toStringAsFixed(2),
+                style: TextStyle(
+                  fontWeight: isFavorite ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
               Text(trend, style: TextStyle(color: trendColor)),
             ],
           ),
@@ -160,7 +313,7 @@ class _CurrencyTabState extends State<CurrencyTab> {
     displayFavorites.add(base);
 
     // Restliche Favoriten (nur wenn vorhanden in rates)
-    for (var f in baseFavorites) {
+    for (var f in favorites) {
       if (f != base && rates.containsKey(f)) displayFavorites.add(f);
     }
 
@@ -200,30 +353,68 @@ class _CurrencyTabState extends State<CurrencyTab> {
                         color: Colors.blue.shade700,
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        isCached == true
-                            ? 'Daten aus Cache (aktualisiert in ${(300 - (cacheAge ?? 0))}s)'
-                            : 'Frische Daten vom Server',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.blue.shade700,
-                          fontWeight: FontWeight.w500,
+                      Expanded(
+                        child: Text(
+                          isCached == true
+                              ? 'Daten aus Cache (aktualisiert in ${(300 - (cacheAge ?? 0))}s)'
+                              : 'Frische Daten vom Server',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.blue.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
+                      ),
+                      // Refresh Button
+                      IconButton(
+                        icon: Icon(Icons.refresh, size: 20, color: Colors.blue.shade700),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: () async {
+                          setState(() => loading = true);
+                          await fetchRates();
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(lastUpdateDate != null 
+                                    ? 'Aktualisiert: Daten vom $lastUpdateDate'
+                                    : 'Aktualisiert'),
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        },
                       ),
                     ],
                   ),
                   if (lastUpdateDate != null) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.calendar_today, size: 12, color: Colors.blue.shade600),
+                        const SizedBox(width: 6),
+                        Text(
+                          'EZB-Referenzkurse vom: $lastUpdateDate',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.blue.shade800,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
                     Text(
-                      'Kurse vom: $lastUpdateDate',
+                      '💡 EZB publiziert neue Kurse werktags ~15:00-16:00 CET',
                       style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.blue.shade600,
+                        fontSize: 10,
+                        color: Colors.grey.shade700,
+                        fontStyle: FontStyle.italic,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '💡 Währungskurse aktualisieren sich nur an Werktagen',
+                      '↓ Ziehen zum Aktualisieren oder Refresh-Button nutzen',
                       style: TextStyle(
                         fontSize: 10,
                         color: Colors.grey.shade600,
@@ -243,7 +434,20 @@ class _CurrencyTabState extends State<CurrencyTab> {
               DropdownButton<String>(
                 value: dropdownValue,
                 items: allItems
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                    .map((c) => DropdownMenuItem(
+                          value: c,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                currencyFlags[c] ?? '🏳️',
+                                style: const TextStyle(fontSize: 20),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(c),
+                            ],
+                          ),
+                        ))
                     .toList(),
                 onChanged: (value) {
                   if (value != null) setState(() => base = value);

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'config.dart';
+import 'analytics_service.dart';
 
 class GoldItem {
   String coinName;
@@ -30,6 +31,11 @@ class _GoldTabState extends State<GoldTab> {
   final currencies = ['USD', 'EUR', 'TRY'];
   bool loading = true;
 
+  // Cache-Metadaten
+  bool? isCached;
+  int? cacheAge;
+  String? lastFetchTime;
+
   final TextEditingController quantityController = TextEditingController(
     text: '1',
   );
@@ -42,8 +48,8 @@ class _GoldTabState extends State<GoldTab> {
   @override
   void initState() {
     super.initState();
+    loadCart(); // Muss VOR fetchGold() aufgerufen werden
     fetchGold();
-    loadCart();
   }
 
   /* ------------------ API ------------------ */
@@ -57,6 +63,12 @@ class _GoldTabState extends State<GoldTab> {
       setState(() {
         coins = Map<String, dynamic>.from(data['coins']);
         selectedCoin = coins.keys.first;
+        
+        // Cache-Metadaten extrahieren
+        isCached = data['cached'] as bool?;
+        cacheAge = data['cacheAge'] as int?;
+        lastFetchTime = DateTime.now().toString().substring(0, 19);
+        
         loading = false;
       });
     } catch (e) {
@@ -85,18 +97,50 @@ class _GoldTabState extends State<GoldTab> {
   /* ------------------ Persistenz ------------------ */
 
   Future<void> saveCart() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonList = cart.map((e) => jsonEncode(e.toJson())).toList();
-    await prefs.setStringList('gold_cart', jsonList);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // Speichere komplette Cart-Liste als einzelnen JSON-String
+      final cartJson = jsonEncode(cart.map((e) => e.toJson()).toList());
+      final success = await prefs.setString('gold_cart', cartJson);
+      debugPrint('[GoldTab] Warenkorb gespeichert: ${cart.length} Items, success: $success');
+      debugPrint('[GoldTab] Gespeicherte Daten: $cartJson');
+      
+      // Verifikation: Sofort wieder lesen
+      final verification = prefs.getString('gold_cart');
+      debugPrint('[GoldTab] Verifikation gelesen: ${verification?.length ?? 0} Zeichen');
+    } catch (e) {
+      debugPrint('[GoldTab] Fehler beim Speichern des Warenkorbs: $e');
+    }
   }
 
   Future<void> loadCart() async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonList = prefs.getStringList('gold_cart');
-    if (jsonList != null) {
-      setState(() {
-        cart = jsonList.map((e) => GoldItem.fromJson(jsonDecode(e))).toList();
-      });
+    final cartJson = prefs.getString('gold_cart');
+    
+    debugPrint('[GoldTab] Lade Warenkorb... Daten vorhanden: ${cartJson != null}');
+    
+    if (cartJson != null && cartJson.isNotEmpty) {
+      try {
+        final List<dynamic> decoded = jsonDecode(cartJson);
+        final loadedCart = decoded.map((e) => GoldItem.fromJson(e as Map<String, dynamic>)).toList();
+        
+        if (mounted) {
+          setState(() {
+            cart = loadedCart;
+          });
+        }
+        debugPrint('[GoldTab] Warenkorb erfolgreich geladen: ${loadedCart.length} Items');
+        for (var item in loadedCart) {
+          debugPrint('[GoldTab]   - ${item.coinName}: ${item.quantity}x');
+        }
+      } catch (e) {
+        debugPrint('[GoldTab] Fehler beim Laden des Warenkorbs: $e');
+        debugPrint('[GoldTab] Fehlerhafte Daten: $cartJson');
+        // Bei Fehler: Warenkorb zurücksetzen
+        await prefs.remove('gold_cart');
+      }
+    } else {
+      debugPrint('[GoldTab] Kein gespeicherter Warenkorb gefunden');
     }
   }
 
@@ -114,6 +158,12 @@ class _GoldTabState extends State<GoldTab> {
       }
     });
 
+    // Tracke Warenkorb-Hinzufügung
+    final coinData = coins[selectedCoin];
+    final weight = (coinData?['weight'] ?? 1.0) as double;
+    final grams = qty * weight;
+    AnalyticsService().trackCartItemAdded(grams, selectedCurrency);
+
     saveCart();
     quantityController.text = '1';
   }
@@ -127,6 +177,9 @@ class _GoldTabState extends State<GoldTab> {
       );
       cart.removeAt(index);
     });
+
+    // Tracke Entfernung
+    AnalyticsService().trackCartItemRemoved(index);
 
     saveCart();
     showUndoSnackBar('Eintrag entfernt');
@@ -192,10 +245,106 @@ class _GoldTabState extends State<GoldTab> {
       totalDealer += spotTotal * 1.04;
     }
 
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
+    return RefreshIndicator(
+      onRefresh: fetchGold,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              // Daten-Status Info (wie bei Currency-Tab)
+          if (isCached != null || lastFetchTime != null)
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        isCached == true ? Icons.cached : Icons.cloud_done,
+                        size: 16,
+                        color: Colors.amber.shade700,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          isCached == true
+                              ? 'Daten aus Cache (aktualisiert in ${(600 - (cacheAge ?? 0))}s)'
+                              : 'Frische Goldpreis-Daten vom Server',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.amber.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      // Refresh Button
+                      IconButton(
+                        icon: Icon(Icons.refresh, size: 20, color: Colors.amber.shade700),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: () async {
+                          setState(() => loading = true);
+                          await fetchGold();
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Goldpreise aktualisiert'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                  if (lastFetchTime != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.access_time, size: 12, color: Colors.amber.shade600),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Zuletzt aktualisiert: ${lastFetchTime!.substring(11, 19)}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.amber.shade800,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '💰 Spot-Preis: Aktueller Marktpreis • Händler: +4% Aufschlag',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey.shade700,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '↓ Ziehen zum Aktualisieren oder Refresh-Button nutzen',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey.shade600,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          
           DropdownButtonFormField<String>(
             value: selectedCoin,
             decoration: const InputDecoration(
@@ -263,19 +412,21 @@ class _GoldTabState extends State<GoldTab> {
           ),
           const SizedBox(height: 20),
 
-          Expanded(
-            child: ListView.builder(
-              itemCount: cart.length,
-              itemBuilder: (context, index) {
-                final item = cart[index];
-                final coinData = coins[item.coinName];
-                final weight = coinData?['weight'] ?? 1.0;
-                final data = coinData?[selectedCurrency] ?? {};
-                final spot = data['spot'] ?? 0.0;
+          // Warenkorb-Liste (mit ShrinkWrap für ScrollView-Kompatibilität)
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: cart.length,
+            itemBuilder: (context, index) {
+              final item = cart[index];
+              final coinData = coins[item.coinName];
+              final weight = coinData?['weight'] ?? 1.0;
+              final data = coinData?[selectedCurrency] ?? {};
+              final spot = data['spot'] ?? 0.0;
 
-                final grams = item.quantity * weight;
-                final spotTotal = (spot / weight) * grams;
-                final dealerTotal = spotTotal * 1.04;
+              final grams = item.quantity * weight;
+              final spotTotal = (spot / weight) * grams;
+              final dealerTotal = spotTotal * 1.04;
 
                 return Dismissible(
                   key: ValueKey(item.coinName),
@@ -307,7 +458,8 @@ class _GoldTabState extends State<GoldTab> {
                 );
               },
             ),
-          ),
+          
+          const SizedBox(height: 16),
 
           Text(
             'Gesamt Spot: ${totalSpot.toStringAsFixed(2)} $selectedCurrency',
@@ -318,6 +470,8 @@ class _GoldTabState extends State<GoldTab> {
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
         ],
+      ),
+        ),
       ),
     );
   }
