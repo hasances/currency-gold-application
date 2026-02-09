@@ -19,6 +19,11 @@ class _CurrencyTabState extends State<CurrencyTab> {
   String base = 'EUR';
   bool loading = true;
   Timer? updateTimer;
+  
+  // Neue Variablen für Cache-Metadaten
+  String? lastUpdateDate;
+  bool? isCached;
+  int? cacheAge;
 
   final List<String> baseFavorites = ['EUR', 'TRY', 'USD', 'GBP', 'CHF'];
   final TextEditingController amountController = TextEditingController(
@@ -73,6 +78,11 @@ class _CurrencyTabState extends State<CurrencyTab> {
 
           // EUR immer hinzufügen
           rates['EUR'] = 1.0;
+
+          // Metadaten speichern
+          lastUpdateDate = data['date'] as String?;
+          isCached = data['cached'] as bool?;
+          cacheAge = data['cacheAge'] as int?;
 
           base = rates.containsKey(base)
               ? base
@@ -169,6 +179,62 @@ class _CurrencyTabState extends State<CurrencyTab> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // Daten-Status Info (neu!)
+          if (lastUpdateDate != null || isCached != null)
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        isCached == true ? Icons.cached : Icons.cloud_done,
+                        size: 16,
+                        color: Colors.blue.shade700,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        isCached == true
+                            ? 'Daten aus Cache (aktualisiert in ${(300 - (cacheAge ?? 0))}s)'
+                            : 'Frische Daten vom Server',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.blue.shade700,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (lastUpdateDate != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Kurse vom: $lastUpdateDate',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.blue.shade600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '💡 Währungskurse aktualisieren sich nur an Werktagen',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey.shade600,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          
           // Dropdown Basiswährung
           Row(
             children: [

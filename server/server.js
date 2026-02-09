@@ -117,7 +117,13 @@ app.get('/rates', async (req, res) => {
   // Prüfe Cache zuerst
   if (isCacheValid(cache.rates, CACHE_DURATION_MS)) {
     console.log('Serving rates from cache');
-    return res.json(cache.rates.data);
+    const response = {
+      ...cache.rates.data,
+      cached: true,
+      cacheAge: Math.floor((Date.now() - cache.rates.timestamp) / 1000),
+      nextUpdate: Math.floor((cache.rates.timestamp + CACHE_DURATION_MS - Date.now()) / 1000)
+    };
+    return res.json(response);
   }
 
   try {
@@ -126,19 +132,31 @@ app.get('/rates', async (req, res) => {
     const data = await response.json();
     
     setCache('rates', data);
-    res.json(data);
+    
+    const enhancedData = {
+      ...data,
+      cached: false,
+      fetchedAt: new Date().toISOString()
+    };
+    
+    res.json(enhancedData);
   } catch (err) {
     console.error('Currency Fetch Fehler:', err);
     
     // Fallback auf alten Cache oder Standardwerte
     if (cache.rates.data) {
       console.log('Using stale cache as fallback');
-      return res.json(cache.rates.data);
+      return res.json({
+        ...cache.rates.data,
+        cached: true,
+        stale: true
+      });
     }
     
     res.json({
       base: 'EUR',
       rates: { USD: 1.1, GBP: 0.85, TRY: 32.0, EUR: 1.0 },
+      fallback: true
     });
   }
 });

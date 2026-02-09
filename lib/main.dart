@@ -2,8 +2,16 @@ import 'package:flutter/material.dart';
 import 'currency_tab.dart';
 import 'gold_tab.dart';
 //import 'chart_tab.dart';
+import 'debug_mode_check.dart';
+import 'config.dart';
 
 void main() {
+  // Zeige Environment Info beim Start
+  print('=== CURRENCY GOLD APP ===');
+  print('Mode: ${Config.isDevelopment ? 'DEVELOPMENT' : 'PRODUCTION'}');
+  print('API URL: ${Config.apiBaseUrl}');
+  print('========================');
+  
   runApp(const MyApp());
 }
 
@@ -25,7 +33,7 @@ class HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2, // 🔥 WICHTIG
+      length: 3, // 🔥 WICHTIG: Jetzt 3 Tabs
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Money Exchanger'),
@@ -33,7 +41,7 @@ class HomePage extends StatelessWidget {
             tabs: [
               Tab(text: 'Currency'),
               Tab(text: 'Gold'),
-              //Tab(text: 'Chart'),
+              Tab(text: 'Debug'),
             ],
           ),
         ),
@@ -41,7 +49,7 @@ class HomePage extends StatelessWidget {
           children: [
             CurrencyTab(),
             GoldTab(),
-            //ChartTab(),
+            DebugModeCheck(),
           ],
         ),
       ),
